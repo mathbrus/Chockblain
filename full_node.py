@@ -1,4 +1,5 @@
 import classes
+import database
 import funcs
 
 print(" _____ _                _   ______ _       _                __   _____\n"
@@ -10,7 +11,19 @@ print(" _____ _                _   ______ _       _                __   _____\n"
       "\n"
       "\n")
 
-command = input("Waiting for instructions\n")
+database.init_database('database/db2')
 
-if command == "show":
-    funcs.show_blockchain_summary()
+command = input("Waiting for instructions : \n")
+
+while command != "exit()":
+      if command == "show_database":
+            funcs.show_blockchain_summary()
+            command = input("Waiting for instructions : \n")
+      elif command == "validate_block":
+            block_height = input("Choose block height : \n")
+            funcs.validate_transactions_of_block(funcs.get_last_block())
+            command = input("Waiting for instructions : \n")
+      else:
+            print("Unknown command. Type exit() to end process.\n")
+            command = input("Waiting for instructions : \n")
+

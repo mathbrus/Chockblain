@@ -7,7 +7,7 @@ class Block:
     # This class is used to create a block, regardless of the validity of its content or hash
     # When initiating a block, the block id and prev_block_hash are set to -1,
     # meaning it is not yet defined. It will be when it is added to the chain.
-    # We add then content as a list of transactions
+    # We add the content as a list of transactions
 
     # Since we hash only the block metadata (aka header), there is no nested reference
 
@@ -38,10 +38,6 @@ class Transaction:
     # Outputs are in the form of a dict as well, but with pairs of (destination_address, amount)
     def __init__(self, dict_of_inputs, dict_of_outputs):
 
-        # MAKE SURE THE INPUT AND OUTPUTS AMOUNTS ARE CORRECT
-
-        # serialized_dict_of_inputs = pickle.dumps(dict_of_inputs)
-        # serialized_dict_of_outputs = pickle.dumps(dict_of_outputs)
         self.internals = {
             "dict_of_inputs": dict_of_inputs,
             "dict_of_outputs": dict_of_outputs

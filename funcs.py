@@ -1,28 +1,15 @@
 import classes
 import copy
+import database
 import hashlib
 import pandas as pd
 import pickle
 import random
 
 
-db_file_path = None
-
-
-def init_database(path):
-    global db_file_path
-    if db_file_path is None:
-        db_file_path = path
-    else:
-        raise RuntimeError("Database path has already been set !")
-
-
 def create_genesis_block():
     genesis_block = classes.GenesisBlock()
-    db_file = open(db_file_path, 'wb')
-    db = [genesis_block]
-    pickle.dump(db, db_file)
-    db_file.close()
+    database.write_to_db([genesis_block])
     return genesis_block
 
 
@@ -32,16 +19,13 @@ def add_block_to_db(block):
     block.metadata["id"] = last_block.metadata["id"]+1
     block.metadata["prev_block_hash"] = get_block_hash(last_block)
 
-    db_file = open(db_file_path, 'rb')
-    db = pickle.load(db_file)
-    db_file.close()
+    db = database.read_from_db()
     db.append(block)
-    db_file = open(db_file_path, 'wb')
-    pickle.dump(db, db_file)
-    db_file.close()
+    database.write_to_db(db)
 
 
 def mine_block(block):
+    # This function returns a mined copy of the block
     mined_block = copy.copy(block)
     last_block = get_last_block()
 
@@ -69,26 +53,21 @@ def get_block_hash(block):
 
 def get_last_block():
     # Returns last block of the chain
-    db_file = open(db_file_path, 'rb')
-    db = pickle.load(db_file)
-    db_file.close()
+    db = database.read_from_db()
     last_block = db[-1]
     return last_block
 
 
 def get_list_of_blocks():
     # Returns the whole blockchain as a list of blocks
-    db_file = open(db_file_path, 'rb')
-    db = pickle.load(db_file)
-    db_file.close()
+    db = database.read_from_db()
     return db
 
 
 def get_transaction_by_txhash(tx_hash):
     # Returns the transaction with the hash = tx_hash, False otherwise
-    db_file = open(db_file_path, 'rb')
-    db = pickle.load(db_file)
-    db_file.close()
+
+    db = database.read_from_db()
 
     # We loop through the blocks by skipping the genesis block
     for b in db[1:]:
@@ -97,10 +76,11 @@ def get_transaction_by_txhash(tx_hash):
             # For each transaction
             if t.txhash == tx_hash:
                 return t
+    print("TransactionFinder : Unable to find a transaction.")
     return False
 
 
-def is_spendable(tx_hash, position):
+def _is_spendable(tx_hash, position):
     # Returns true if we can spend the input, false otherwise
     # We test two things : Does the input exist, and is the reference to it unique ?
 
@@ -111,8 +91,10 @@ def is_spendable(tx_hash, position):
         try:
             list(tx.internals["dict_of_outputs"].items())[position]
         except IndexError:
-            print("Reference to an unexisting output.")
+            print("BlockTransactionsValidator : Reference to an unexisting output.")
             return False
+    else:
+        return False
 
     # Is the reference unique ?
     nb_of_matches = 0
@@ -150,6 +132,11 @@ def get_amount_from_input(tx_hash, position):
 def validate_transactions_of_block(block):
     # Validates the transactions in the block given
 
+    # The first block is by definition always valid (and tricky to validate.
+    if block.metadata["id"] == 1:
+        print("First block !")
+        return True
+
     # There are two sources in invalidity for a tx : inputs are not spendable, or the amount is not correct
 
     block_tx_no = 0
@@ -164,12 +151,13 @@ def validate_transactions_of_block(block):
         tx_input_no = 0
         for tx_hash, position in t.internals["dict_of_inputs"].items():
 
-            # For each input element of a given tx, we check if is_spendable returns True.
-            if is_spendable(tx_hash, position):
+            # For each input element of a given tx, we check if _is_spendable returns True.
+            if _is_spendable(tx_hash, position):
                 input_amount += get_amount_from_input(tx_hash, position)
                 tx_input_no += 1
             else:
-                print("Inconsistency in input no. {} of transaction no. {} detected.".format(tx_input_no, block_tx_no))
+                print("BlockTransactionValidator : Inconsistency in input no. {} of transaction no. {} detected."
+                      .format(tx_input_no, block_tx_no))
                 return False
 
         # Outputs of a transaction are of format (destination address, amount)
@@ -178,7 +166,8 @@ def validate_transactions_of_block(block):
 
         # Last thing to check : does the input total match the output total ?
         if input_amount != output_amount:
-            print("Unbalanced input and output amounts in transaction no. {} detected. Inputs : {}, Outputs : {}."
+            print("BlockTransactionValidator : Unbalanced input and output amounts in transaction "
+                  "no. {} detected. Inputs : {}, Outputs : {}."
                   .format(block_tx_no, input_amount, output_amount))
             return False
 
