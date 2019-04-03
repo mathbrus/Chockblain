@@ -7,8 +7,8 @@ import pickle
 import random
 
 
-def create_genesis_block():
-    genesis_block = classes.GenesisBlock()
+def create_genesis_block(output_address):
+    genesis_block = classes.GenesisBlock(output_address)
     database.write_to_db([genesis_block])
     return genesis_block
 
@@ -34,8 +34,8 @@ def mine_block(block):
 
     hash_candidate = "1"
 
-    while not hash_candidate.startswith("0"):
-        nonce = random.randint(0, 100000)
+    while not hash_candidate.startswith("0000"):
+        nonce = random.randint(0, 1000000)
         mined_block.metadata["nonce"] = nonce
         serialized_mined_block = pickle.dumps(block.metadata)
         hash_candidate = hashlib.sha256(serialized_mined_block).hexdigest()
@@ -80,38 +80,6 @@ def get_transaction_by_txhash(tx_hash):
     return False
 
 
-def _is_spendable(tx_hash, position):
-    # Returns true if we can spend the input, false otherwise
-    # We test two things : Does the input exist, and is the reference to it unique ?
-
-    # Does the input exist as output of another transaction ?
-    tx = get_transaction_by_txhash(tx_hash)
-    if tx is not False:
-        # We have found the transaction
-        try:
-            list(tx.internals["dict_of_outputs"].items())[position]
-        except IndexError:
-            print("BlockTransactionsValidator : Reference to an unexisting output.")
-            return False
-    else:
-        return False
-
-    # Is the reference unique ?
-    nb_of_matches = 0
-
-    list_of_blocks = get_list_of_blocks()
-    for b in list_of_blocks[1:]:
-        for t in b.block_content:
-            for current_tx_hash, current_position in t.internals["dict_of_inputs"].items():
-                if (current_tx_hash, current_position) == (tx_hash, position):
-                    nb_of_matches += 1
-
-    if nb_of_matches > 0:
-        return False
-
-    return True
-
-
 def get_amount_from_input(tx_hash, position):
     # Returns either the amount or False if not found
 
@@ -127,55 +95,6 @@ def get_amount_from_input(tx_hash, position):
 
         # We return the amount. Note that the items() methods returns tuples
         return list(tx.internals["dict_of_outputs"].items())[position][1]
-
-
-def validate_transactions_of_block(block):
-    # Validates the transactions in the block given
-
-    # The first block is by definition always valid (and tricky to validate.
-    if block.metadata["id"] == 1:
-        print("First block !")
-        return True
-
-    # There are two sources in invalidity for a tx : inputs are not spendable, or the amount is not correct
-
-    block_tx_no = 0
-
-    for t in block.block_content:
-
-        # For each transaction in the block, we keep record of the input and output amounts
-        input_amount = 0
-        output_amount = 0
-
-        # Remember : inputs of a transaction are of format (hash of tx where we find the spendable output, its position)
-        tx_input_no = 0
-        for tx_hash, position in t.internals["dict_of_inputs"].items():
-
-            # For each input element of a given tx, we check if _is_spendable returns True.
-            if _is_spendable(tx_hash, position):
-                input_amount += get_amount_from_input(tx_hash, position)
-                tx_input_no += 1
-            else:
-                print("BlockTransactionValidator : Inconsistency in input no. {} of transaction no. {} detected."
-                      .format(tx_input_no, block_tx_no))
-                return False
-
-        # Outputs of a transaction are of format (destination address, amount)
-        for amount in t.internals["dict_of_outputs"].values():
-            output_amount += amount
-
-        # Last thing to check : does the input total match the output total ?
-        if input_amount != output_amount:
-            print("BlockTransactionValidator : Unbalanced input and output amounts in transaction "
-                  "no. {} detected. Inputs : {}, Outputs : {}."
-                  .format(block_tx_no, input_amount, output_amount))
-            return False
-
-        block_tx_no += 1
-
-    # Now we are sure the block is valid
-    print("Valid block !")
-    return True
 
 
 def show_blockchain_summary():
@@ -196,4 +115,3 @@ def show_blockchain_summary():
     print("###########################################")
     print(table)
     print("###########################################")
-
