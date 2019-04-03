@@ -8,12 +8,20 @@ import random
 
 
 def create_genesis_block(output_address):
+    """(Re)sets the blockchain and adds the first block."""
+    if len(get_list_of_blocks()) > 0:
+        prompt = input("Database is not empty, creating a new genesis block will erase it. Type [s] to stop. Press "
+                       "any other key to continue.")
+        if prompt == "s":
+            raise KeyboardInterrupt
+
     genesis_block = classes.GenesisBlock(output_address)
     database.write_to_db([genesis_block])
     return genesis_block
 
 
 def add_block_to_db(block):
+    """Adds the block passed as parameter to the blockchain, with corresponding block id and prov_block_hash."""
     last_block = get_last_block()
 
     block.metadata["id"] = last_block.metadata["id"]+1
@@ -25,7 +33,7 @@ def add_block_to_db(block):
 
 
 def mine_block(block):
-    # This function returns a mined copy of the block
+    """Returns a mined copy of the block, meaning the nonce is set so that the hash of the block is valid."""
     mined_block = copy.copy(block)
     last_block = get_last_block()
 
@@ -44,6 +52,7 @@ def mine_block(block):
 
 
 def get_block_hash(block):
+    """Returns the "hash of a block", which is in fact the hash of the metadata of the block."""
     # With this function we can obtain the SHA256 hash of the block metadata
     # This is a bit a misnomer, since it does not hash the entire block
     serialized_block_metadata = pickle.dumps(block.metadata)
@@ -52,20 +61,20 @@ def get_block_hash(block):
 
 
 def get_last_block():
-    # Returns last block of the chain
+    """Returns last block of the chain."""
     db = database.read_from_db()
     last_block = db[-1]
     return last_block
 
 
 def get_list_of_blocks():
-    # Returns the whole blockchain as a list of blocks
+    """Returns the whole blockchain as a list of blocks."""
     db = database.read_from_db()
     return db
 
 
 def get_transaction_by_txhash(tx_hash):
-    # Returns the transaction with the hash = tx_hash, False otherwise
+    """Returns the transaction using its hash, False otherwise."""
 
     db = database.read_from_db()
 
@@ -81,7 +90,7 @@ def get_transaction_by_txhash(tx_hash):
 
 
 def get_amount_from_input(tx_hash, position):
-    # Returns either the amount or False if not found
+    """Returns either the amount or False if not found."""
 
     # Does the input exist as output of another transaction ?
     tx = get_transaction_by_txhash(tx_hash)

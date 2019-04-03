@@ -61,7 +61,7 @@ def _is_owned(tx_hash, position, verifying_key):
 
 
 def validate_transactions_of_block(block):
-    # Validates the transactions in the block given
+    """Validates the transactions in the given block, using 4 checking mechanisms."""
 
     # The first block is by definition always valid.
     if block.metadata["id"] == 1:
