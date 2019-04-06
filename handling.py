@@ -5,6 +5,7 @@ import hashlib
 import pandas as pd
 import pickle
 import random
+import verification
 
 
 def create_genesis_block(output_address):
@@ -21,11 +22,12 @@ def create_genesis_block(output_address):
 
 
 def add_block_to_db(block):
-    """Adds the block passed as parameter to the blockchain, with corresponding block id and prov_block_hash."""
+    """Adds the block passed as parameter to the blockchain, with corresponding block id and prov_block_hash. Does not
+    verify validity."""
     last_block = get_last_block()
 
     block.metadata["id"] = last_block.metadata["id"]+1
-    block.metadata["prev_block_hash"] = get_block_hash(last_block)
+    block.metadata["prev_block_hash"] = verification.get_block_hash(last_block)
 
     db = database.read_from_db()
     db.append(block)
@@ -38,7 +40,7 @@ def mine_block(block):
     last_block = get_last_block()
 
     mined_block.metadata["id"] = last_block.metadata["id"]+1
-    mined_block.metadata["prev_block_hash"] = get_block_hash(last_block)
+    mined_block.metadata["prev_block_hash"] = verification.get_block_hash(last_block)
 
     hash_candidate = "1"
 
@@ -49,15 +51,6 @@ def mine_block(block):
         hash_candidate = hashlib.sha256(serialized_mined_block).hexdigest()
 
     return mined_block
-
-
-def get_block_hash(block):
-    """Returns the "hash of a block", which is in fact the hash of the metadata of the block."""
-    # With this function we can obtain the SHA256 hash of the block metadata
-    # This is a bit a misnomer, since it does not hash the entire block
-    serialized_block_metadata = pickle.dumps(block.metadata)
-    block_hash = hashlib.sha256(serialized_block_metadata).hexdigest()
-    return block_hash
 
 
 def get_last_block():
@@ -113,7 +106,7 @@ def show_blockchain_summary():
     prev_block_hashes = []
     for b in list_of_blocks:
         block_heights.append(b.metadata["id"])
-        block_hashes.append(get_block_hash(b))
+        block_hashes.append(verification.get_block_hash(b))
         prev_block_hashes.append(b.metadata["prev_block_hash"])
 
     table = pd.DataFrame()

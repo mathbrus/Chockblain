@@ -48,10 +48,16 @@ def verify_address(address, verifying_key_string):
 
 def verify_signing(transaction_hash, signature, verifying_key_string):
     """Returns True if the transaction has been signed with the verifying key, False otherwise."""
-    verifying_key = VerifyingKey.from_string(verifying_key_string, curve=NIST384p)
+    try:
+        verifying_key = VerifyingKey.from_string(verifying_key_string, curve=NIST384p)
+    except TypeError:
+        # The ECDSA function returns a TypeError if the verifying_key_string is 0 = default value when unsigned tx
+        print("TransactionSignatureVerifyer : cannot verify signature of unsigned transaction.")
+        return False
 
     try:
         verifying_key.verify(signature, bytes(transaction_hash, encoding="ascii"))
         return True
     except BadSignatureError:
+        print("TransactionSignatureVerifyer : signature does not match in tx with hash : {}".format(transaction_hash))
         return False
