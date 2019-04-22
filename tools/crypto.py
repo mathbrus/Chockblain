@@ -21,6 +21,13 @@ def _get_signing_key(seed):
     return SigningKey.from_secret_exponent(secret_exponent, curve=NIST384p)
 
 
+def _get_verifying_key_string(seed):
+    # Returns the string of the verifying key, given the seed as input
+    secret_exponent = randrange_from_seed__trytryagain(seed, NIST384p.order)
+    signing_key = SigningKey.from_secret_exponent(secret_exponent, curve=NIST384p)
+    return signing_key.get_verifying_key().to_string()
+
+
 def get_address(seed):
     """Returns the address from the seed. It is the hexdigest of the sha256 hash of the verifying key."""
     signing_key = _get_signing_key(seed)  # aka private key

@@ -1,4 +1,4 @@
-import crypto
+from tools import crypto
 import hashlib
 import pickle
 
@@ -21,6 +21,13 @@ class Block:
             "nonce": 0,
             "block_content_hash": block_content_hash
         }
+
+    def __eq__(self, other):
+        if not isinstance(other, Block):
+            # Comparing against unrelated type
+            return NotImplemented
+
+        return self.block_content == other.block_content and self.metadata == other.metadata
 
 
 class GenesisBlock(Block):
@@ -51,3 +58,13 @@ class Transaction:
     def sign(self, seed):
         # Before broadcasting a transaction to the network, we must sign it.
         self.signature, self.verifying_key = crypto.sign_transaction(seed, self.txhash)
+
+    def __eq__(self, other):
+        if not isinstance(other, Transaction):
+            # Comparing against unrelated type
+            return NotImplemented
+
+        return self.internals == other.internals\
+            and self.txhash == other.txhash\
+            and self.signature == other.signature\
+            and self.verifying_key == other.verifying_key

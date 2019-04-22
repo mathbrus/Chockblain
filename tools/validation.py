@@ -1,5 +1,4 @@
-import crypto
-import handling
+from tools import crypto, handling, exceptions
 import hashlib
 import pickle
 
@@ -7,20 +6,12 @@ import pickle
 def _is_spendable(tx_hash, position):
     """Controls whether the input can be spent. The tx_hash corresponds to the previous transaction
     from which we want to spend the output."""
-    # Returns true if we can spend the input, false otherwise
+    # Returns true if we can spend the input, raises corresponding exceptions otherwise
     # We test two things : Does the input exist, and is the reference to it unique ?
 
-    # Does the input exist as output of another transaction ?
-    previous_tx = handling.get_transaction_by_txhash(tx_hash)
-    if previous_tx is not False:
-        # We have found the transaction
-        try:
-            list(previous_tx.internals["dict_of_outputs"].items())[position]
-        except IndexError:
-            print("BlockTransactionsValidator : Reference to an unexisting output.")
-            return False
-    else:
-        return False
+    # Does the input exist as output of another transaction ? To do that we try to find the amount of the input/output
+
+    output = handling.get_amount_from_input(tx_hash, position)  # See corresponding exceptions
 
     # Is the reference unique ?
     nb_of_matches = 0
@@ -32,8 +23,10 @@ def _is_spendable(tx_hash, position):
                 if (current_tx_hash, current_position) == (tx_hash, position):
                     nb_of_matches += 1
 
+    # TODO : implement double-spend check within same block
+
     if nb_of_matches > 0:
-        return False
+        raise exceptions.ValidationError("Reference to an already spend output !")
 
     return True
 
@@ -41,23 +34,26 @@ def _is_spendable(tx_hash, position):
 def _has_valid_signature(tx):
     """Controls whether the signature of the block is valid. Wrapper function that allows for passing only
     the transaction as arguments, as opposed to the crypto.verify_signing"""
-    # Returns true if the signature is valid, false otherwise.
+    # Returns true if the signature is valid, raises ValidationError otherwise.
 
     if crypto.verify_signing(tx.txhash, tx.signature, tx.verifying_key):
         return True
     else:
-        return False
+        raise exceptions.ValidationError("Invalid Signature detected in transaction with hash {}.".format(tx.txhash))
 
 
 def _is_owned(tx_hash, position, verifying_key):
     """Controls whether the signature of the block proves ownership of the inputs. The tx_hash corresponds
     to the previous transaction from which we want to spend the output."""
-    # Returns true if the signature corresponds, false otherwise.
+    # Returns true if the signature corresponds, raises corresponding exceptions otherwise.
 
-    previous_tx = handling.get_transaction_by_txhash(tx_hash)
+    previous_tx = handling.get_transaction_by_txhash(tx_hash)  # See corresponding exceptions
 
-    # We do not need to check the existence of the previous_tx since we call the function after _is_spendable.
-    address_of_output = list(previous_tx.internals["dict_of_outputs"].keys())[position]
+    try:
+        address_of_output = list(previous_tx.internals["dict_of_outputs"].keys())[position]
+    except IndexError:
+        raise exceptions.ValidationError("Incorrect position of output when verifying ownership of transaction "
+                                         "with hash {}.".format(tx_hash))
 
     return crypto.verify_address(address_of_output, verifying_key)
 
@@ -66,7 +62,8 @@ def _has_correct_hash(tx):
     """Checks if the txhash has not been tampered with."""
     if tx.txhash == get_tx_hash(tx):
         return True
-    return False
+    raise exceptions.ValidationError("Invalid transaction hash : {} does not correspond to true hash."
+                                     .format(tx.txhash))
 
 
 def _validate_transactions_of_block(block):
@@ -78,6 +75,7 @@ def _validate_transactions_of_block(block):
         return True
 
     # There are 5 sources in invalidity for a tx :
+    # [1] The hash has been modified and does not correspond anymore
     # [2] The signature of the block does not correspond to its verifying key
     # [3] The outputs we are trying to spend are not spendable
     # [4] The verifying key does not correspond to the addresses that we are trying to spend from
@@ -87,19 +85,11 @@ def _validate_transactions_of_block(block):
 
     for t in block.block_content:
 
-        # We control the tx_hash:
-        if not _has_correct_hash(t):
-            print("BlockTransactionValidator : Invalid hash detected in transaction with claimed hash : {} of block "
-                  "no {}."
-                  .format(t.txhash, block.metadata["id"]))
-            return False
+        # We control the tx_hash: [check 1]
+        _has_correct_hash(t)
 
         # We control the signature [check 2]
-        if not _has_valid_signature(t):
-            print("BlockTransactionValidator : Invalid signature detected in transaction with hash : {} of block "
-                  "no {}."
-                  .format(t.txhash, block.metadata["id"]))
-            return False
+        _has_valid_signature(t)
 
         # For each transaction in the block, we keep record of the input and output amounts
         input_amount = 0
@@ -110,24 +100,14 @@ def _validate_transactions_of_block(block):
         for tx_hash, position in t.internals["dict_of_inputs"].items():
 
             # For each input element of a given tx, we check if it is spendable [check 3]
-            if _is_spendable(tx_hash, position):
-                try:
-                    input_amount += handling.get_amount_from_input(tx_hash, position)
-                    tx_input_no += 1
-                except IndexError as id_err:
-                    print(id_err)
-                    return False
-            else:
-                print("BlockTransactionValidator : Inconsistency in input no. {} of transaction no. {} detected."
-                      .format(tx_input_no, block_tx_no))
-                return False
+            _is_spendable(tx_hash, position)
+
+            input_amount += handling.get_amount_from_input(tx_hash, position)
+            tx_input_no += 1
 
             # We control the ownership [check 4]. We can trust the verifying key since we are after [2] and the
             # existence of tx and input since we are after [3]
-            if not _is_owned(tx_hash, position, t.verifying_key):
-                print("BlockTransactionValidator : Unproven ownership detected in input no. {} of transaction "
-                      "no. {} detected.".format(tx_input_no, block_tx_no))
-                return False
+            _is_owned(tx_hash, position, t.verifying_key)
 
         # Outputs of a transaction are of format (destination address, amount)
         for amount in t.internals["dict_of_outputs"].values():
@@ -135,15 +115,13 @@ def _validate_transactions_of_block(block):
 
         # Last thing to check : does the input total match the output total ? [check 5]
         if input_amount != output_amount:
-            print("BlockTransactionValidator : Unbalanced input and output amounts in transaction "
-                  "no. {} detected. Inputs : {}, Outputs : {}."
-                  .format(block_tx_no, input_amount, output_amount))
-            return False
+            raise exceptions.ValidationError("Unbalanced input and output amounts in transaction with hash {} "
+                                             "detected. Inputs : {}, Outputs : {}."
+                                             .format(t.txhash, input_amount, output_amount))
 
         block_tx_no += 1
 
     # Now we are sure the block is valid
-    print("Valid block !")
     return True
 
 
@@ -163,8 +141,8 @@ def get_tx_hash(tx):
     return tx_hash
 
 
-
 def validate_block(block):
     """This functions can be used to validate a block. In addition to the transactions verification, it also
     checks that the block has the correct structure."""
-    pass
+    # TODO : implementation
+    return _validate_transactions_of_block(block)
