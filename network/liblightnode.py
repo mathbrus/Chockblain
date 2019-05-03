@@ -87,7 +87,7 @@ class TransactionMessage:
         """Takes the transaction, calls _create_transaction_message and adds the created transaction message (now in the
         correct formatting for broadcasting) to the send_buffer. Marks _transaction_queued as True."""
 
-        content = self.transaction["content"]
+        content = self.transaction
         transaction_message = TransactionMessage._create_transaction_message(content_bytes=content)  # Static method
         self._send_buffer += transaction_message
         self._transaction_queued = True

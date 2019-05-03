@@ -106,7 +106,9 @@ class TransactionMessage:
         """Reads the transaction message."""
 
         content_len = self.jsonheader["content-length"]
-        if not len(self._recv_buffer) >= content_len: # Check if we already have received enough data, or wait for more buffer.
+
+        # Check if we already have received enough data, or wait for more buffer.
+        if not len(self._recv_buffer) >= content_len:
             return
         data = self._recv_buffer[:content_len]
         self._recv_buffer = self._recv_buffer[content_len:]

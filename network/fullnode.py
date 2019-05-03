@@ -1,4 +1,5 @@
 from network import libfullnode
+import pickle
 import socket
 import selectors
 import traceback
@@ -38,7 +39,7 @@ try:
                 try:
                     transaction_to_receive.process_events(mask)
                     if transaction_to_receive.transaction_received is not None:
-                        received_transactions.append(transaction_to_receive.transaction_received)
+                        received_transactions.append(pickle.loads(transaction_to_receive.transaction_received))
                 except Exception:
                     print(
                         "main: error: exception for",
