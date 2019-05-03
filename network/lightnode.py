@@ -1,5 +1,4 @@
-import liblightnode
-import sys
+from network import liblightnode
 import socket
 import selectors
 import traceback
@@ -7,43 +6,35 @@ import traceback
 sel = selectors.DefaultSelector()
 
 
-def create_transaction(text):
-
-    return dict(
-        content=bytes(text, encoding="utf-8"),
-    )
-
-
 def start_connection(host, port, transaction):
-    addr = (host, port)
-    print("starting connection to", addr)
+    address_tuple = (host, port)
+    print("starting connection to", address_tuple)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setblocking(False)
-    sock.connect_ex(addr)
+    sock.connect_ex(address_tuple)
     events = selectors.EVENT_WRITE
-    transaction_message = liblightnode.Message(sel, sock, addr, transaction)
+    transaction_message = liblightnode.TransactionMessage(sel, sock, address_tuple, transaction)
     sel.register(sock, events, data=transaction_message)
 
 
 host = '127.0.0.1'
-port = 65432 
-text = "lismoica"
-transaction = create_transaction(text)
+port = 60001
+transaction = dict(content=bytes("lismoica", encoding="utf-8"))
 start_connection(host, port, transaction)
 
 try:
     while True:
         events = sel.select(timeout=1)
         for key, mask in events:
-            message = key.data
+            transaction_to_send = key.data  # Transaction that has been plugged in the transaction_message object
             try:
-                message.process_events(mask)
+                transaction_to_send.process_events(mask)
             except Exception:
                 print(
                     "main: error: exception for",
-                    f"{message.addr}:\n{traceback.format_exc()}",
+                    f"{transaction_to_send.addr}:\n{traceback.format_exc()}",
                 )
-                message.close()
+                transaction_to_send.close()
         # Check for a socket being monitored to continue.
         if not sel.get_map():
             break

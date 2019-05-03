@@ -1,53 +1,52 @@
-import selectors
+from network import libfullnode
 import socket
-import types
+import selectors
+import traceback
+
+sel = selectors.DefaultSelector()
 
 
 def accept_wrapper(sock):
-    conn, addr = sock.accept()  # Should be ready to read
-    print('accepted connection from', addr)
+    conn, address_tuple = sock.accept()  # Should be ready to read
+    print("accepted connection from", address_tuple)
     conn.setblocking(False)
-    data = types.SimpleNamespace(addr=addr, inb=b'', outb=b'')
-    events = selectors.EVENT_READ | selectors.EVENT_WRITE
-    sel.register(conn, events, data=data)
+    transaction_message = libfullnode.TransactionMessage(sel, conn, address_tuple)
+    sel.register(conn, selectors.EVENT_READ, data=transaction_message)
 
 
-def service_connection(key, mask):
-    sock = key.fileobj
-    data = key.data
-    if mask & selectors.EVENT_READ:  # Mask equal to read
-        recv_data = sock.recv(1024)  # Should be ready to read
-        if recv_data:
-            data.outb += recv_data
-        else:
-            print('closing connection to', data.addr)
-            sel.unregister(sock)
-            sock.close()
-    if mask & selectors.EVENT_WRITE:  # Mask equal to write
-        if data.outb:
-            print('echoing', repr(data.outb), 'to', data.addr)
-            sent = sock.send(data.outb)  # Should be ready to write
-            data.outb = data.outb[sent:]
-
-
-sel = selectors.DefaultSelector()
-HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
-PORT = 65432
-
+host = '127.0.0.1'
+port = 60001
 listening_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-listening_sock.bind((HOST, PORT))
+# Avoid bind() exception: OSError: [Errno 48] Address already in use
+listening_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+listening_sock.bind((host, port))
 listening_sock.listen()
-print('listening on', (HOST, PORT))
-
+print("listening on", (host, port))
 listening_sock.setblocking(False)
-
 sel.register(listening_sock, selectors.EVENT_READ, data=None)
 
-while True:
-    events = sel.select(timeout=None)
-    for key, mask in events:
-        if key.data is None:  # The listening sock
-            accept_wrapper(key.fileobj)
-        else:  # One of the clients' sock
-            service_connection(key, mask)
+received_transactions=[]
 
+try:
+    while True:
+        events = sel.select(timeout=None)
+        for key, mask in events:
+            if key.data is None:
+                accept_wrapper(key.fileobj)
+            else:
+                transaction_to_receive = key.data
+                try:
+                    transaction_to_receive.process_events(mask)
+                    if transaction_to_receive.transaction_received is not None:
+                        received_transactions.append(transaction_to_receive.transaction_received)
+                except Exception:
+                    print(
+                        "main: error: exception for",
+                        f"{transaction_to_receive.addr}:\n{traceback.format_exc()}",
+                    )
+                    transaction_to_receive.close()
+
+except KeyboardInterrupt:
+    print("caught keyboard interrupt, exiting")
+finally:
+    sel.close()
