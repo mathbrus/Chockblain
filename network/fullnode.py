@@ -1,4 +1,5 @@
 from network import libfullnode
+from api import database
 import pickle
 import socket
 import selectors
@@ -18,14 +19,15 @@ print(" _____ _                _   ______ _       _                __   _____\n"
       )
 
 sel = selectors.DefaultSelector()
+database.init_database('database/db2')
 
 
 def accept_wrapper(sock):
-    conn, address_tuple = sock.accept()  # Should be ready to read
-    print("accepted connection from", address_tuple)
+    conn, address_tuple = sock.accept()  # We spawn a new socket through which the client connection will happen
+    print("accepted new connection from", address_tuple)
     conn.setblocking(False)
-    transaction_message = libfullnode.TransactionMessage(sel, conn, address_tuple)
-    sel.register(conn, selectors.EVENT_READ, data=transaction_message)
+    c_conn = libfullnode.ClientConnection(sel, conn, address_tuple)  # We instantiate a new ClientConnection
+    sel.register(conn, selectors.EVENT_READ, data=c_conn)  # We start by registering the socket in read mode
 
 
 host = '127.0.0.1'
@@ -46,19 +48,19 @@ try:
         events = sel.select(timeout=None)
         for key, mask in events:
             if key.data is None:
-                accept_wrapper(key.fileobj)
+                accept_wrapper(key.fileobj)  # key.fileobj is the listening socket here
             else:
-                transaction_to_receive = key.data
+                client_connection = key.data
                 try:
-                    transaction_to_receive.process_events(mask)
-                    if transaction_to_receive.transaction_received is not None:
-                        received_transactions.append(pickle.loads(transaction_to_receive.transaction_received))
+                    client_connection.process_events(mask)
+                    if client_connection.transaction_received is not None:
+                        received_transactions.append(pickle.loads(client_connection.transaction_received))
                 except Exception:
                     print(
                         "main: error: exception for",
-                        f"{transaction_to_receive.addr}:\n{traceback.format_exc()}",
+                        f"{client_connection.addr}:\n{traceback.format_exc()}",
                     )
-                    transaction_to_receive.close()
+                    client_connection.close()
 
 except KeyboardInterrupt:
     print("caught keyboard interrupt, exiting")
