@@ -13,23 +13,23 @@ class FullNodeConnection:
         self.selector = selector
         self.sock = sock
         self.addr = addr
-
         self.connection_type = connection_type
 
         if self.connection_type == "database_request":
             self._recv_buffer = b""  # For when we receive the database from the full node
             self.database_received = None   # Filled when we have successfully received the database from the full node
+            self._jsonheader_len = None
+            self.jsonheader = None
+
         elif self.connection_type == "transaction_broadcast":
             self.transaction_bytes = transaction_bytes
+
         else:
             # Unrecognized connection_type.
             print(f'Unrecognized connection_type from : {self.addr}')
             self.close()
 
         self._send_buffer = b""
-
-        self._jsonheader_len = None
-        self.jsonheader = None
 
         self._client_message_queued = False  # To ensure we started to send the client message to the full node
 

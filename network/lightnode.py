@@ -1,4 +1,4 @@
-from network import liblightnode
+from network import lightnode_connections
 import pickle
 import socket
 import selectors
@@ -11,7 +11,7 @@ class TransactionBroadcasting:
         self.transaction = transaction
         self.sel = selectors.DefaultSelector()
         self._HOST = '127.0.0.1'
-        self._PORT = 60001
+        self._PORT = 60010
         self._broadcasting_done = False
 
     def _start_connection(self, transaction_bytes):
@@ -21,9 +21,9 @@ class TransactionBroadcasting:
         sock.setblocking(False)
         sock.connect_ex(address_tuple)
         events = selectors.EVENT_WRITE  # We only want to write to the socket in this case
-        transaction_message = liblightnode.FullNodeConnection(self.sel, sock, address_tuple,
-                                                              connection_type="transaction_broadcast",
-                                                              transaction_bytes=transaction_bytes)
+        transaction_message = lightnode_connections.FullNodeConnection(self.sel, sock, address_tuple,
+                                                                       connection_type="transaction_broadcast",
+                                                                       transaction_bytes=transaction_bytes)
         self.sel.register(sock, events, data=transaction_message)
 
     def broadcast(self):
@@ -72,8 +72,8 @@ class DatabaseRequest:
         sock.setblocking(False)
         sock.connect_ex(address_tuple)
         events = selectors.EVENT_WRITE  # We only want to write to the socket in this case
-        database_request = liblightnode.FullNodeConnection(self.sel, sock, address_tuple,
-                                                           connection_type="database_request",)
+        database_request = lightnode_connections.FullNodeConnection(self.sel, sock, address_tuple,
+                                                                    connection_type="database_request", )
         self.sel.register(sock, events, data=database_request)
 
     def request(self):

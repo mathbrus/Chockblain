@@ -14,6 +14,8 @@ class ClientConnection:
         self.selector = selector
         self.sock = sock
         self.addr = addr
+
+        # Here we initalize all the class properties (for tx and db) as we cannot yet know which one will be the case
         self._recv_buffer = b""  # Used both for receiving transactions and request to send the database
         self._send_buffer = b""  # For when we send the database to a client
 
@@ -101,7 +103,7 @@ class ClientConnection:
             if self.jsonheader is None:
                 self.process_jsonheader()  # Triggers once we have received jsonheader_len bytes
 
-        if self.jsonheader:
+        if self.jsonheader is not None:
 
             # If what we received is a database request, we change the events that the selectors is listening to write
             if self.jsonheader["content-type"] == "db_request":
@@ -197,3 +199,35 @@ class ClientConnection:
 
             self.transaction_received = data
             self.close()
+
+
+class NeighborConnection:
+    """This class is used to process one connection with a neighbor."""
+    def __init__(self, selector, sock, addr):
+        self.selector = selector
+        self.sock = sock
+        self.addr = addr
+
+    def close(self):
+        """Used for unregistering the selector, closing the socket and deleting
+         reference to socket object for garbage collection"""
+
+        print("closing connection to neighbor : ", self.addr)
+        try:
+            self.selector.unregister(self.sock)
+        except Exception as e:
+            print(
+                f"error: selector.unregister() exception for",
+                f"{self.addr}: {repr(e)}",
+            )
+
+        try:
+            self.sock.close()
+        except OSError as e:
+            print(
+                f"error: socket.close() exception for",
+                f"{self.addr}: {repr(e)}",
+            )
+        finally:
+            # Delete reference to socket object for garbage collection
+            self.sock = None
