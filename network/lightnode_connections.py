@@ -79,8 +79,8 @@ class FullNodeConnection:
             "content-length": len(content_bytes),
         }
         jsonheader_bytes = tools.json_encode(jsonheader, "utf-8")
-        client_message_hdr = struct.pack(">H", len(jsonheader_bytes))
-        client_message = client_message_hdr + jsonheader_bytes + content_bytes
+        client_message_fixed_hdr = struct.pack(">H", len(jsonheader_bytes))
+        client_message = client_message_fixed_hdr + jsonheader_bytes + content_bytes
         return client_message
 
     def _queue_client_message(self):

@@ -11,7 +11,7 @@ class TransactionBroadcasting:
         self.transaction = transaction
         self.sel = selectors.DefaultSelector()
         self._HOST = '127.0.0.1'
-        self._PORT = 60010
+        self._PORT = 60001
         self._broadcasting_done = False
 
     def _start_connection(self, transaction_bytes):

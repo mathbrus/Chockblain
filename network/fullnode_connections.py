@@ -80,8 +80,8 @@ class ClientConnection:
             "content-length": len(content_bytes),
         }
         jsonheader_bytes = tools.json_encode(jsonheader, "utf-8")
-        database_message_hdr = struct.pack(">H", len(jsonheader_bytes))
-        database_message = database_message_hdr + jsonheader_bytes + content_bytes
+        database_message_fixed_hdr = struct.pack(">H", len(jsonheader_bytes))
+        database_message = database_message_fixed_hdr + jsonheader_bytes + content_bytes
         return database_message
 
     def process_events(self, mask):
@@ -202,11 +202,123 @@ class ClientConnection:
 
 
 class NeighborConnection:
-    """This class is used to process one connection with a neighbor."""
-    def __init__(self, selector, sock, addr):
+    """This class is used to process one connection with a neighbor.
+    For now, it can either send or receive the database from a neighbor."""
+    def __init__(self, selector, sock, addr, database_bytes=None):
         self.selector = selector
         self.sock = sock
         self.addr = addr
+
+        # Here we initalize all the class properties
+        self._recv_buffer = b""  # Used for receiving a database
+        self._send_buffer = b""  # For when we send the database to a neighbor
+
+        self._jsonheader_len = None
+        self.jsonheader = None
+
+        self._database_queued = False  # To ensure we started to send the database to a neighbor
+        self.database_received = None  # Filled when we have successfully received a new database from a client
+
+        if database_bytes is not None:  # If we are sending the database
+            self.database_bytes = database_bytes
+
+    def _read(self):
+        """Internal function called by read() to manage the socket."""
+        try:
+            # Should be ready to read
+            data = self.sock.recv(4096)
+        except BlockingIOError:
+            # Resource temporarily unavailable (errno EWOULDBLOCK), skipping it for now
+            # select() will eventually call us again
+            pass
+        else:
+            if data:
+                self._recv_buffer += data
+            else:
+                raise RuntimeError("Peer closed.")
+
+    def _write(self):
+        """Internal function called by write() to manage the socket."""
+        if self._send_buffer:
+            print("Sending...")
+            try:
+                # Should be ready to write
+                sent = self.sock.send(self._send_buffer)
+            except BlockingIOError:
+                # Resource temporarily unavailable (errno EWOULDBLOCK), skipping it for now
+                # select() will eventually call us again
+                pass
+            else:  # If no errors were raised
+                self._send_buffer = self._send_buffer[sent:]
+
+    @staticmethod
+    def _create_database_message(content_type, content_bytes):
+        """Returns the 3-parts database message, given the content to include, consistent with out application-layer
+        protocol that we have defined for broadcasting messages."""
+
+        jsonheader = {
+            "byteorder": sys.byteorder,  # For the endianness of the OS
+            "content-type": content_type,
+            "content-length": len(content_bytes),
+        }
+        jsonheader_bytes = tools.json_encode(jsonheader, "utf-8")
+        database_message_fixed_hdr = struct.pack(">H", len(jsonheader_bytes))
+        database_message = database_message_fixed_hdr + jsonheader_bytes + content_bytes
+        return database_message
+
+    def _queue_database(self):
+        """Calls _create_database_message and adds the created message (now in the
+        correct formatting for broadcasting) to the send_buffer. Marks _database_queued as True."""
+
+        database_message = NeighborConnection._create_database_message(content_type="database_content",
+                                                                       content_bytes=self.database_bytes)
+        self._send_buffer += database_message
+        self._database_queued = True
+
+    def process_events(self, mask):
+        """Entry point when the socket is ready for reading or writing."""
+        if mask & selectors.EVENT_READ:  # When receiving a database
+            self.read()
+        if mask & selectors.EVENT_WRITE:  # When sending the database
+            self.write()
+
+    def read(self):
+        """Manages the reading of the neighbor message through the socket, while maintaining the state. In addition,
+        it interprets the different parts of the message."""
+        self._read()
+
+        if self._jsonheader_len is None:
+            self.process_jsonheader_length()  # Triggers once we have received 2 bytes
+
+        if self._jsonheader_len is not None:
+            if self.jsonheader is None:
+                self.process_jsonheader()  # Triggers once we have received jsonheader_len bytes
+
+        if self.jsonheader is not None:
+
+            # Making sure we are receiving a database
+            if self.jsonheader["content-type"] == "database_content":
+                if self.database_received is None:
+                    self.process_database_message()  # Triggers if we have recv'd jsonheader["content-length"] bytes
+                    # Closes the socket
+            else:
+                # Unrecognized content-type.
+                print(f'Unrecognized content-type from : {self.addr}')
+                self.close()
+
+    def write(self):
+        """Manages the writing of what is in the sending buffer through the socket, while maintaining the state."""
+        if not self._database_queued:  # We have not yet init the sending process. Ensures that we init only once.
+            self._queue_database()  # Initializes the sending process.
+
+        self._write()  # Writes what is in the sending buffer
+
+        if self._database_queued:
+            if not self._send_buffer:  # We started AND finished the sending.
+
+                # We are done sending the database, we can now call close().
+                print("Database transmitted to neighbor.")
+                self.close()
 
     def close(self):
         """Used for unregistering the selector, closing the socket and deleting
@@ -231,3 +343,47 @@ class NeighborConnection:
         finally:
             # Delete reference to socket object for garbage collection
             self.sock = None
+
+    def process_jsonheader_length(self):
+        """Reads the 2 bytes containing the length of the header."""
+
+        fixed_header_length = 2
+        if len(self._recv_buffer) >= fixed_header_length:  # Check if we already have received enough data
+            self._jsonheader_len = struct.unpack(
+                ">H", self._recv_buffer[:fixed_header_length]
+            )[0]
+            self._recv_buffer = self._recv_buffer[fixed_header_length:]
+
+    def process_jsonheader(self):
+        """Reads the json_header of the actual database message."""
+
+        if len(self._recv_buffer) >= self._jsonheader_len:  # Check if we already have received enough data
+            self.jsonheader = tools.json_decode(
+                self._recv_buffer[:self._jsonheader_len], "utf-8"
+            )
+            self._recv_buffer = self._recv_buffer[self._jsonheader_len:]
+            for required_header in (
+                "byteorder",
+                "content-type",  # For the sake of consistency in the application-layer protocol
+                "content-length"
+            ):
+                if required_header not in self.jsonheader:
+                    raise ValueError(f'Missing required header "{required_header}".')
+
+    def process_database_message(self):
+        """Reads the database message."""
+
+        content_len = self.jsonheader["content-length"]
+
+        # Check if we already have received enough data, or wait for more buffer.
+        if len(self._recv_buffer) >= content_len:
+            data = self._recv_buffer[:content_len]
+            self._recv_buffer = self._recv_buffer[content_len:]
+
+            print(
+                f'Received a database from neighbor : ',
+                self.addr,
+            )
+
+            self.database_received = data
+            self.close()

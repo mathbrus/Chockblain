@@ -1,11 +1,12 @@
 {
     "FullnodeInfo":{
         "host": "127.0.0.1",
-        "clients_port": 60001,
-        "database_path": "database/db2",
-        "neighbors_connection_mode": "passive"
+        "clients_listening_port": 60001,
+        "neighbors_listening_port": 60005,
+        "database_path": "database/db2"
     },
     "NeighborsInfo":{
-        "neighbors_listening_port": 60005
+        "neighbor_address": "127.0.0.1",
+        "neighbor_port": 60006
     }
 }
