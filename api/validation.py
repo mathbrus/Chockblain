@@ -16,7 +16,7 @@ def _is_spendable(tx_hash, position):
     # Is the reference unique ?
     nb_of_matches = 0
 
-    list_of_blocks = handling.get_list_of_blocks()
+    list_of_blocks = handling.get_database()
     for b in list_of_blocks[1:]:
         for t in b.block_content:
             for current_tx_hash, current_position in t.internals["dict_of_inputs"].items():

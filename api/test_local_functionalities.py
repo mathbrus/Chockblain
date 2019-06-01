@@ -59,7 +59,7 @@ class GenesisBlockTests(unittest.TestCase):
         handling.add_genesis_block(genesis_block)
 
         read_genesis_block = handling.get_last_block()
-        list_of_blocks = handling.get_list_of_blocks()
+        list_of_blocks = handling.get_database()
 
         self.assertEqual(1, len(list_of_blocks), msg="Length of chain after genesis block is not equal to 1.")
         self.assertEqual(genesis_block, read_genesis_block, msg="Chain does not contain correct genesis block.")

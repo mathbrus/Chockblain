@@ -25,6 +25,8 @@ class ClientConnection:
         self._database_queued = False  # To ensure we started to send the database to a client
         self.transaction_received = None  # Filled when we have successfully received a new transaction from a client
 
+        self.is_closed = False  # To indicate that it has consciously been closed
+
     def _read(self):
         """Internal function called by read() to manage the socket."""
         try:
@@ -154,6 +156,7 @@ class ClientConnection:
             )
         finally:
             # Delete reference to socket object for garbage collection
+            self.is_closed = True
             self.sock = None
 
     def process_jsonheader_length(self):
@@ -193,7 +196,7 @@ class ClientConnection:
             self._recv_buffer = self._recv_buffer[content_len:]
 
             print(
-                f'received a message from',
+                f'Received a message from',
                 self.addr,
             )
 
@@ -217,7 +220,10 @@ class NeighborConnection:
         self.jsonheader = None
 
         self._database_queued = False  # To ensure we started to send the database to a neighbor
-        self.database_received = None  # Filled when we have successfully received a new database from a client
+        self.database_received = None  # Filled when we have successfully received a new database from a neighbor
+        self.database_sent = False  # Filled when we have successfully sent a database to a neighbor
+
+        self.is_closed = False  # To indicate that it has consciously been closed
 
         if database_bytes is not None:  # If we are sending the database
             self.database_bytes = database_bytes
@@ -316,9 +322,9 @@ class NeighborConnection:
         if self._database_queued:
             if not self._send_buffer:  # We started AND finished the sending.
 
-                # We are done sending the database, we can now call close().
+                # We are done sending the database, we can now call flag database_received as true.
                 print("Database transmitted to neighbor.")
-                self.close()
+                self.database_sent = True
 
     def close(self):
         """Used for unregistering the selector, closing the socket and deleting
@@ -342,6 +348,7 @@ class NeighborConnection:
             )
         finally:
             # Delete reference to socket object for garbage collection
+            self.is_closed = True
             self.sock = None
 
     def process_jsonheader_length(self):

@@ -22,9 +22,18 @@ def add_block_to_db(block):
     block.metadata["id"] = last_block.metadata["id"]+1
     block.metadata["prev_block_hash"] = validation.get_block_hash(last_block)
 
-    db = database.read_from_db()
+    db = get_database()
     db.append(block)
     database.write_to_db(db)
+
+
+def remove_last_block_from_db(block):
+    """Removes the last block from the database. Used by a fullnode when the block is invalid."""
+
+    invalid_db = get_database()
+    valid_db = invalid_db.pop()
+
+    database.write_to_db(valid_db)
 
 
 def mine_block(block):
@@ -55,7 +64,7 @@ def get_last_block():
     return last_block
 
 
-def get_list_of_blocks():
+def get_database():
     """Returns the whole blockchain as a list of blocks."""
 
     db = database.read_from_db()
@@ -94,7 +103,7 @@ def get_amount_from_input(tx_hash, position):
 
 
 def show_blockchain_summary():
-    list_of_blocks = get_list_of_blocks()
+    list_of_blocks = get_database()
     block_heights = []
     block_hashes = []
     prev_block_hashes = []
