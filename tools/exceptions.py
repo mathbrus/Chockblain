@@ -5,7 +5,7 @@ class ValidationError(Exception):
         print(log)
 
 
-class HandlingError(Exception):
+class APIError(Exception):
     def __init__(self, log):
         super().__init__()
         self.log = log

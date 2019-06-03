@@ -1,5 +1,5 @@
 import json, pickle
-from api import classes, database, handling, validation
+from tools import classes, database, api, validation
 from network import fullnode_socket_manager as fsm
 
 # The lists that contain the transactions and databases received and not yet processed - state of the node
@@ -37,15 +37,15 @@ def process(connection, neighbors_selector):
         # We check if the transactions of the block are valid
         if validation.validate_block(new_block):
             print("Block is valid, now mining.")
-            mined_new_block = handling.mine_block(new_block)
-            handling.add_block_to_db(mined_new_block)
+            mined_new_block = api.mine_block(new_block)
+            api.add_block_to_db(mined_new_block)
             received_transactions_stack = []
         else:
             print("Invalid new block, discarding transactions")
             received_transactions_stack = []
 
         # We start the broadcasting procedure with the serialized database
-        database_bytes = pickle.dumps(handling.get_database())
+        database_bytes = pickle.dumps(api.get_database())
         fsm.start_gossip(address_tuple=(neighbor_address, neighbor_port),
                          database_bytes=database_bytes, selector=neighbors_selector)
 
@@ -70,7 +70,7 @@ def process(connection, neighbors_selector):
 
     # Consensus : choosing the longest chain
     if len(received_databases_stack) == 1:
-        if len(received_databases_stack[0]) > len(handling.get_database()):
+        if len(received_databases_stack[0]) > len(api.get_database()):
             # The received database replaces our database
             print("Received database is the longest chain, copying.")
             database.write_to_db(received_databases_stack[0])

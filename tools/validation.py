@@ -1,4 +1,4 @@
-from api import crypto, handling, exceptions
+from tools import crypto, api, exceptions
 import hashlib
 import pickle
 
@@ -11,12 +11,12 @@ def _is_spendable(tx_hash, position):
 
     # Does the input exist as output of another transaction ? To do that we try to find the amount of the input/output
 
-    output = handling.get_amount_from_input(tx_hash, position)  # See corresponding exceptions
+    output = api.get_amount_from_input(tx_hash, position)  # See corresponding exceptions
 
     # Is the reference unique ?
     nb_of_matches = 0
 
-    list_of_blocks = handling.get_database()
+    list_of_blocks = api.get_database()
     for b in list_of_blocks[1:]:
         for t in b.block_content:
             for current_tx_hash, current_position in t.internals["dict_of_inputs"].items():
@@ -47,7 +47,7 @@ def _is_owned(tx_hash, position, verifying_key):
     to the previous transaction from which we want to spend the output."""
     # Returns true if the signature corresponds, raises corresponding exceptions otherwise.
 
-    previous_tx = handling.get_transaction_by_txhash(tx_hash)  # See corresponding exceptions
+    previous_tx = api.get_transaction_by_txhash(tx_hash)  # See corresponding exceptions
 
     try:
         address_of_output = list(previous_tx.internals["dict_of_outputs"].keys())[position]
@@ -102,7 +102,7 @@ def _validate_transactions_of_block(block):
             # For each input element of a given tx, we check if it is spendable [check 3]
             _is_spendable(tx_hash, position)
 
-            input_amount += handling.get_amount_from_input(tx_hash, position)
+            input_amount += api.get_amount_from_input(tx_hash, position)
             tx_input_no += 1
 
             # We control the ownership [check 4]. We can trust the verifying key since we are after [2] and the
