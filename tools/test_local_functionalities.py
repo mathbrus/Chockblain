@@ -1,4 +1,4 @@
-from tools import classes, crypto, database, exceptions, api, validation
+from tools import classes, crypto, database, exceptions, fullnode_api, validation
 import hashlib
 import pickle
 import unittest
@@ -21,7 +21,7 @@ class DataBaseTests(unittest.TestCase):
 
     def setUp(self):
         self.db_path = 'database/db_test'
-        database.init_database(self.db_path)
+        database.init_database_path(self.db_path)
 
     def test_database_path(self):
         self.assertEqual(database._db_file_path, self.db_path)
@@ -38,7 +38,7 @@ class DataBaseTests(unittest.TestCase):
 
     def tearDown(self):
         # We reset the database to the initial (empty) value.
-        database.reinit_database()
+        database.reinit_database_path()
 
 
 class GenesisBlockTests(unittest.TestCase):
@@ -52,21 +52,21 @@ class GenesisBlockTests(unittest.TestCase):
 
         # Db
         self.db_path = 'database/db_test'
-        database.init_database(self.db_path)
+        database.init_database_path(self.db_path)
 
     def test_genesis_block_creation(self):
         genesis_block = classes.GenesisBlock(self.address)
-        api.add_genesis_block(genesis_block)
+        fullnode_api.add_genesis_block(genesis_block)
 
-        read_genesis_block = api.get_last_block()
-        list_of_blocks = api.get_database()
+        read_genesis_block = fullnode_api.get_last_block()
+        list_of_blocks = fullnode_api.get_database()
 
         self.assertEqual(1, len(list_of_blocks), msg="Length of chain after genesis block is not equal to 1.")
         self.assertEqual(genesis_block, read_genesis_block, msg="Chain does not contain correct genesis block.")
 
     def tearDown(self):
         # We reset the database to the initial (empty) value.
-        database.reinit_database()
+        database.reinit_database_path()
 
 
 class TransactionTests(unittest.TestCase):
@@ -84,11 +84,11 @@ class TransactionTests(unittest.TestCase):
 
         # Db
         self.db_path = 'database/db_test'
-        database.init_database(self.db_path)
+        database.init_database_path(self.db_path)
 
         # GenBlock
         self.genesis_block = classes.GenesisBlock(self.address)
-        api.add_genesis_block(self.genesis_block)
+        fullnode_api.add_genesis_block(self.genesis_block)
 
         # Input and output dicts, that spend the genesis tx to address2.
         self.dict_of_inputs = {self.genesis_block.block_content[0].txhash: 0}
@@ -101,7 +101,7 @@ class TransactionTests(unittest.TestCase):
 
     def tearDown(self):
         # We reset the database to the initial (empty) value.
-        database.reinit_database()
+        database.reinit_database_path()
 
 
 class BlockTests(unittest.TestCase):
@@ -121,11 +121,11 @@ class BlockTests(unittest.TestCase):
 
         # Db
         self.db_path = 'database/db_test'
-        database.init_database(self.db_path)
+        database.init_database_path(self.db_path)
 
         # GenBlock
         self.genesis_block = classes.GenesisBlock(self.address)
-        api.add_genesis_block(self.genesis_block)
+        fullnode_api.add_genesis_block(self.genesis_block)
 
         # Tx1
         self.dict_of_inputs = {self.genesis_block.block_content[0].txhash: 0}
@@ -135,9 +135,9 @@ class BlockTests(unittest.TestCase):
 
         # Block1
         self.first_block = classes.Block([self.first_tx])
-        self.first_mined_block = api.mine_block(self.first_block)
+        self.first_mined_block = fullnode_api.mine_block(self.first_block)
 
-        api.add_block_to_db(self.first_mined_block)
+        fullnode_api.add_block_to_db(self.first_mined_block)
 
         # Tx2
         self.dict_of_inputs2 = {self.first_mined_block.block_content[0].txhash: 0}
@@ -147,9 +147,9 @@ class BlockTests(unittest.TestCase):
 
         # Block2
         self.second_block = classes.Block([self.second_tx])
-        self.second_mined_block = api.mine_block(self.second_block)
+        self.second_mined_block = fullnode_api.mine_block(self.second_block)
 
-        api.add_block_to_db(self.second_mined_block)
+        fullnode_api.add_block_to_db(self.second_mined_block)
 
     def test_pow(self):
         # Testing the number of leading 0
@@ -168,13 +168,13 @@ class BlockTests(unittest.TestCase):
         serialized_mined_block = pickle.dumps(self.first_mined_block.metadata)
         first_block_hash = hashlib.sha256(serialized_mined_block).hexdigest()
 
-        last_block = api.get_last_block()
+        last_block = fullnode_api.get_last_block()
         prev_block_hash = last_block.metadata["prev_block_hash"]
         self.assertEqual(first_block_hash, prev_block_hash)
 
     def tearDown(self):
         # We reset the database to the initial (empty) value.
-        database.reinit_database()
+        database.reinit_database_path()
 
 
 class ValidationTests(unittest.TestCase):
@@ -194,12 +194,12 @@ class ValidationTests(unittest.TestCase):
 
         # Db
         self.db_path = 'database/db_test'
-        database.init_database(self.db_path)
+        database.init_database_path(self.db_path)
 
     def test_double_spend(self):
         # (Re)Starting from GenBlock
         genesis_block = classes.GenesisBlock(self.address)
-        api.add_genesis_block(genesis_block)
+        fullnode_api.add_genesis_block(genesis_block)
 
         # Tx1
         dict_of_inputs = {genesis_block.block_content[0].txhash: 0}
@@ -209,9 +209,9 @@ class ValidationTests(unittest.TestCase):
 
         # Block1
         first_block = classes.Block([first_tx])
-        first_mined_block = api.mine_block(first_block)
+        first_mined_block = fullnode_api.mine_block(first_block)
 
-        api.add_block_to_db(first_mined_block)
+        fullnode_api.add_block_to_db(first_mined_block)
 
         # Tx2
         dict_of_inputs2 = {first_mined_block.block_content[0].txhash: 0}
@@ -221,9 +221,9 @@ class ValidationTests(unittest.TestCase):
 
         # Block2
         second_block = classes.Block([second_tx])
-        second_mined_block = api.mine_block(second_block)
+        second_mined_block = fullnode_api.mine_block(second_block)
 
-        api.add_block_to_db(second_mined_block)
+        fullnode_api.add_block_to_db(second_mined_block)
 
         # Tx3 -> We try to double spend the same input as we spent in the previous block
         dict_of_inputs3 = {first_mined_block.block_content[0].txhash: 0}
@@ -232,7 +232,7 @@ class ValidationTests(unittest.TestCase):
         third_tx.sign(self.seed2)
 
         third_block = classes.Block([third_tx])
-        third_mined_block = api.mine_block(third_block)
+        third_mined_block = fullnode_api.mine_block(third_block)
 
         with self.assertRaises(exceptions.ValidationError):
             validation.validate_block(third_mined_block)
@@ -241,7 +241,7 @@ class ValidationTests(unittest.TestCase):
         # Trying to spend more than what we have in the inputs
         # (Re)Starting from GenBlock
         genesis_block = classes.GenesisBlock(self.address)
-        api.add_genesis_block(genesis_block)
+        fullnode_api.add_genesis_block(genesis_block)
 
         # Tx1
         dict_of_inputs = {genesis_block.block_content[0].txhash: 0}
@@ -251,9 +251,9 @@ class ValidationTests(unittest.TestCase):
 
         # Block1
         first_block = classes.Block([first_tx])
-        first_mined_block = api.mine_block(first_block)
+        first_mined_block = fullnode_api.mine_block(first_block)
 
-        api.add_block_to_db(first_mined_block)
+        fullnode_api.add_block_to_db(first_mined_block)
 
         # Tx2 -> We try to put 101 as output amount
         dict_of_inputs2 = {first_mined_block.block_content[0].txhash: 0}
@@ -263,9 +263,9 @@ class ValidationTests(unittest.TestCase):
 
         # Block2
         second_block = classes.Block([second_tx])
-        second_mined_block = api.mine_block(second_block)
+        second_mined_block = fullnode_api.mine_block(second_block)
 
-        api.add_block_to_db(second_mined_block)
+        fullnode_api.add_block_to_db(second_mined_block)
 
         with self.assertRaises(exceptions.ValidationError):
             validation.validate_block(second_mined_block)
@@ -274,7 +274,7 @@ class ValidationTests(unittest.TestCase):
         # Trying to spend inexistant input
         # (Re)Starting from GenBlock
         genesis_block = classes.GenesisBlock(self.address)
-        api.add_genesis_block(genesis_block)
+        fullnode_api.add_genesis_block(genesis_block)
 
         # Tx1
         dict_of_inputs = {genesis_block.block_content[0].txhash: 0}
@@ -284,9 +284,9 @@ class ValidationTests(unittest.TestCase):
 
         # Block1
         first_block = classes.Block([first_tx])
-        first_mined_block = api.mine_block(first_block)
+        first_mined_block = fullnode_api.mine_block(first_block)
 
-        api.add_block_to_db(first_mined_block)
+        fullnode_api.add_block_to_db(first_mined_block)
 
         # Tx2 -> we try to spend an unexisting input
         dict_of_inputs2 = {first_mined_block.block_content[0].txhash: 1}
@@ -296,9 +296,9 @@ class ValidationTests(unittest.TestCase):
 
         # Block2
         second_block = classes.Block([second_tx])
-        second_mined_block = api.mine_block(second_block)
+        second_mined_block = fullnode_api.mine_block(second_block)
 
-        api.add_block_to_db(second_mined_block)
+        fullnode_api.add_block_to_db(second_mined_block)
 
         with self.assertRaises(exceptions.APIError):  # Since the exceptions comes from one level deeper.
             validation.validate_block(second_mined_block)
@@ -307,7 +307,7 @@ class ValidationTests(unittest.TestCase):
         # Trying to spend someone else's output
         # (Re)Starting from GenBlock
         genesis_block = classes.GenesisBlock(self.address)
-        api.add_genesis_block(genesis_block)
+        fullnode_api.add_genesis_block(genesis_block)
 
         # Tx1 -> We send it to an address belonging to seed
         dict_of_inputs = {genesis_block.block_content[0].txhash: 0}
@@ -317,9 +317,9 @@ class ValidationTests(unittest.TestCase):
 
         # Block1
         first_block = classes.Block([first_tx])
-        first_mined_block = api.mine_block(first_block)
+        first_mined_block = fullnode_api.mine_block(first_block)
 
-        api.add_block_to_db(first_mined_block)
+        fullnode_api.add_block_to_db(first_mined_block)
 
         # Tx2 -> we try to spend someone else's output since we sign with seed2
         dict_of_inputs2 = {first_mined_block.block_content[0].txhash: 0}
@@ -329,16 +329,16 @@ class ValidationTests(unittest.TestCase):
 
         # Block2
         second_block = classes.Block([second_tx])
-        second_mined_block = api.mine_block(second_block)
+        second_mined_block = fullnode_api.mine_block(second_block)
 
-        api.add_block_to_db(second_mined_block)
+        fullnode_api.add_block_to_db(second_mined_block)
 
         with self.assertRaises(exceptions.ValidationError):
             validation.validate_block(second_mined_block)
 
     def tearDown(self):
         # We reset the database to the initial (empty) value.
-        database.reinit_database()
+        database.reinit_database_path()
 
 
 if __name__ == '__main__':

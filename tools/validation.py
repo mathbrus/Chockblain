@@ -1,4 +1,4 @@
-from tools import crypto, api, exceptions
+from tools import crypto, fullnode_api, exceptions
 import hashlib
 import pickle
 
@@ -11,19 +11,17 @@ def _is_spendable(tx_hash, position):
 
     # Does the input exist as output of another transaction ? To do that we try to find the amount of the input/output
 
-    output = api.get_amount_from_input(tx_hash, position)  # See corresponding exceptions
+    output = fullnode_api.get_amount_from_input(tx_hash, position)  # See corresponding exceptions
 
     # Is the reference unique ?
     nb_of_matches = 0
 
-    list_of_blocks = api.get_database()
-    for b in list_of_blocks[1:]:
+    list_of_blocks = fullnode_api.get_database()
+    for b in list_of_blocks:
         for t in b.block_content:
             for current_tx_hash, current_position in t.internals["dict_of_inputs"].items():
                 if (current_tx_hash, current_position) == (tx_hash, position):
                     nb_of_matches += 1
-
-    # TODO : implement double-spend check within same block
 
     if nb_of_matches > 0:
         raise exceptions.ValidationError("Reference to an already spend output !")
@@ -47,7 +45,7 @@ def _is_owned(tx_hash, position, verifying_key):
     to the previous transaction from which we want to spend the output."""
     # Returns true if the signature corresponds, raises corresponding exceptions otherwise.
 
-    previous_tx = api.get_transaction_by_txhash(tx_hash)  # See corresponding exceptions
+    previous_tx = fullnode_api.get_transaction_by_txhash(tx_hash)  # See corresponding exceptions
 
     try:
         address_of_output = list(previous_tx.internals["dict_of_outputs"].keys())[position]
@@ -67,21 +65,24 @@ def _has_correct_hash(tx):
 
 
 def _validate_transactions_of_block(block):
-    """Validates the transactions in the given block, using 4 checking mechanisms."""
+    """Validates the transactions in the given block, using 5 checking mechanisms. In addition, ensures that
+    there is no conflict between the transactions."""
 
     # The first block is by definition always valid.
     if block.metadata["id"] == 1:
-        print("First block is always true.")
+        print("First block is always valid.")
         return True
 
     # There are 5 sources in invalidity for a tx :
     # [1] The hash has been modified and does not correspond anymore
-    # [2] The signature of the block does not correspond to its verifying key
+    # [2] The signature of the transaction does not correspond to its verifying key
     # [3] The outputs we are trying to spend are not spendable
     # [4] The verifying key does not correspond to the addresses that we are trying to spend from
     # [5] The amounts do not match
 
-    block_tx_no = 0
+    # [6] In addition to that, we have to ensure that the transactions of a new block do not conflict.
+
+    list_of_used_inputs = []  # For [check 6]
 
     for t in block.block_content:
 
@@ -99,10 +100,13 @@ def _validate_transactions_of_block(block):
         tx_input_no = 0
         for tx_hash, position in t.internals["dict_of_inputs"].items():
 
+            # We add it to the list of used inputs, for [check 6]
+            list_of_used_inputs.append((tx_hash, position))
+
             # For each input element of a given tx, we check if it is spendable [check 3]
             _is_spendable(tx_hash, position)
 
-            input_amount += api.get_amount_from_input(tx_hash, position)
+            input_amount += fullnode_api.get_amount_from_input(tx_hash, position)
             tx_input_no += 1
 
             # We control the ownership [check 4]. We can trust the verifying key since we are after [2] and the
@@ -113,13 +117,16 @@ def _validate_transactions_of_block(block):
         for amount in t.internals["dict_of_outputs"].values():
             output_amount += amount
 
-        # Last thing to check : does the input total match the output total ? [check 5]
+        # Last thing to check for the tx : does the input total match the output total ? [check 5]
         if input_amount != output_amount:
             raise exceptions.ValidationError("Unbalanced input and output amounts in transaction with hash {} "
                                              "detected. Inputs : {}, Outputs : {}."
                                              .format(t.txhash, input_amount, output_amount))
 
-        block_tx_no += 1
+    # Looking for double spends in the block [check 6]
+    control_set = set(list_of_used_inputs)  # Creating a set will eliminate duplicates
+    if len(control_set) != len(list_of_used_inputs):    # TODO : implement double-spend check within same block
+        raise exceptions.ValidationError("Duplicate reference to the same input in the block.")
 
     # Now we are sure the block is valid
     return True

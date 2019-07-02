@@ -52,7 +52,7 @@ neighbors_sel.register(neighbors_listening_sock, selectors.EVENT_READ, data=None
 
 # ------------- INITIALIZING CLIENT LISTENING SOCKET -----------
 client_sel = selectors.DefaultSelector()
-database.init_database(database_path)
+database.init_database_path(database_path)
 
 clients_listening_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 

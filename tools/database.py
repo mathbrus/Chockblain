@@ -3,7 +3,7 @@ import pickle
 _db_file_path = 0
 
 
-def init_database(path):
+def init_database_path(path):
     """Sets the path to the database file."""
     global _db_file_path
     if _db_file_path == 0:
@@ -12,7 +12,7 @@ def init_database(path):
         raise FileExistsError("Database path has already been set !")
 
 
-def reinit_database():
+def reinit_database_path():
     """Reinitializes the database."""
     global _db_file_path
     _db_file_path = 0

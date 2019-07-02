@@ -1,4 +1,4 @@
-from network import tools
+from network import json_tools
 import pickle
 import sys
 import selectors
@@ -78,7 +78,7 @@ class FullNodeConnection:
             "content-type": content_type,
             "content-length": len(content_bytes),
         }
-        jsonheader_bytes = tools.json_encode(jsonheader, "utf-8")
+        jsonheader_bytes = json_tools.json_encode(jsonheader, "utf-8")
         client_message_fixed_hdr = struct.pack(">H", len(jsonheader_bytes))
         client_message = client_message_fixed_hdr + jsonheader_bytes + content_bytes
         return client_message
@@ -184,7 +184,7 @@ class FullNodeConnection:
         """Reads the json_header of the actual database message."""
 
         if len(self._recv_buffer) >= self._jsonheader_len:  # Check if we already have received enough data
-            self.jsonheader = tools.json_decode(
+            self.jsonheader = json_tools.json_decode(
                 self._recv_buffer[:self._jsonheader_len], "utf-8"
             )
             self._recv_buffer = self._recv_buffer[self._jsonheader_len:]
